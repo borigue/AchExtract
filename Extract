@@ -1,0 +1,132 @@
+#!/bin/bash
+#
+function extract () {
+rm -rf "Exemple/"
+echo "Début de l'extraction de l'archive dans votre répertoire personnel"
+if [ ! -f $1 ]
+	then
+	echo "archive invalide"
+	exit 0
+fi
+repinitial=`pwd` #repinitial est le répertoire courant, celui dans lequel on va créer l'arborescende de répertoires et les fichiers contenus dans l'archive nom_archive
+numheader=`head -1 $1 | cut -d ":" -f1` #par exemple si on a 3:25 à la première line, numheader vaut 3
+numbody=`head -1 $1 | cut -d ":" -f2` #si on a 3:25 numbody vaut 25
+folder=`head -n $numheader $1 | tail -n 1 | cut -d " " -f2` #les deux premières commandes sélectionnes la line de numheader puis on prend le deuxième champ, par exemple Exemple/Test/
+dos="x" #on met une valeur au hasard pour dos
+if [ `echo $folder |grep -c "/"` != 0 ];then  #si dans $folder il y a au moins un slash, alors
+	while [ ! -z $dos ] #tant que la longueur de la chaine n'est pas égale à 0
+	do
+		let "i=$i+1"
+		dos=`echo $folder | cut -d "/" -f $i` #dos est le ième champ avec pour délimiteur /
+		if [ ! -z $dos ]
+		then
+			mkdir "$dos"
+			cd $dos
+		fi
+	done
+else
+	mkdir $folder
+	cd $folder
+fi
+let "numheader=$numheader+1"
+let "numbody=$numbody-1"
+ind=$numheader
+dos=`pwd`
+while [ $ind -ne $numbody ]
+do
+	cd
+	line=`head -n "$ind" $1 | tail -1` 
+	mot1=`echo $line | cut -d " " -f 1`
+	if [ $mot1 != "directory" ] && [ $mot1 != "@" ]
+	then
+		cd $dos
+		lettremot2=`echo $line | cut -d " " -f 2 | cut -c 1`
+		if [ $lettremot2 = "d" ]
+		then		
+			mkdir $mot1
+		else
+			touch $mot1
+			taille=`echo $line | cut -d " " -f 3`
+			if [ $taille -ne 0 ]
+			then			
+				debfich=`echo $line | cut -d " " -f 4` 
+				finfich=`echo $line | cut -d " " -f 5`
+				let "debfich1=$numbody + $debfich"
+				let "finfich1=$debfich1 + $finfich"
+				let "finfich1=$finfich1 - 1"
+				cd
+				texte=""
+				ind1=0
+				let "ind2=$finfich-1"
+				while [ $ind1 -ne $finfich ]
+				do
+					tex=`head -n $debfich1 $1 | tail -n 1`
+					if [ $ind1 -eq $ind2 ]
+					then
+						texte="$texte$tex"
+					else				
+						texte="$texte$tex\n"
+					fi
+					let "debfich1=$debfich1+1"
+					let "ind1=$ind1+1"
+				done
+				cd $dos
+				echo -e "$texte" > $mot1
+			fi
+		fi
+		mot2=`echo $line | cut -d " " -f 2`
+		droitsU=`echo $mot2 | cut -c 2-4`
+		droitsG=`echo $mot2 | cut -c 5-7`
+		droitsO=`echo $mot2 | cut -c 8-10`
+		case $droitsU in
+		rwx ) nbU=700 ;;
+		rw- ) nbU=600 ;;
+		r-x ) nbU=500 ;;
+		r-- ) nbU=400 ;;
+		-wx ) nbU=300 ;;
+		-w- ) nbU=200 ;;
+		--x ) nbU=100 ;;
+		--- ) nbU=0 ;;
+		esac
+		case $droitsG in
+		rwx ) nbG=70 ;;
+		rw- ) nbG=60 ;;
+		r-x ) nbG=50 ;;
+		r-- ) nbG=40 ;;
+		-wx ) nbG=30 ;;
+		-w- ) nbG=20 ;;
+		--x ) nbG=10 ;;
+		--- ) nbG=0 ;;
+		esac
+		case $droitsO in
+		rwx ) nbO=7 ;;
+		rw- ) nbO=6 ;;
+		r-x ) nbO=5 ;;
+		r-- ) nbO=4 ;;
+		-wx ) nbO=3 ;;
+		-w- ) nbO=2 ;;
+		--x ) nbO=1 ;;
+		--- ) nbO=0 ;;
+		esac
+		let "droitsUGO=$nbU+$nbG+$nbO"
+		chmod $droitsUGO $mot1
+	elif [ $mot1 = "directory" ]
+	then
+		dos=`echo $line | cut -d " " -f 2`
+	fi	
+let "ind=$ind+1"
+done
+rm $1
+echo "Extraction terminée"
+}
+
+if [ $# -ne 0 ]
+then
+case $1 in
+-list ) echo "lister" | nc -q 1 $2 $3 ;;
+-browse ) echo "browse $4" | nc $2 $3 ; nc $2 $3 ;;
+-extract ) echo "extract $4" | nc -q 1 $2 $3 > "$HOME/$4"; extract "$HOME/$4" ;;
+-help ) echo -e "Bonjour,\n 3 modes sont disponibles:\n	-Le mode list (vsh -list localhost numport) où vous trouverez la liste des fichiers présent sur le serveur.\n	-Le mode browse (vsh -browse localhost numport nom_archive) dans lequel vous pourrez effectuer les commandes pwd, ls, cat, rm sur votre archive.\n	-Le mode extract (vash -extract localhost numport nom_archive) qui a pour action de créer dans le répertoire courant toute l'arborescence de répertoires et les fichiers contenus dans l'archive nom_archive." ;;
+* ) echo -e "Arguments incorrects.\nFaites vsh -help pour avoir des informations complémentaires" ;;
+esac
+fi
